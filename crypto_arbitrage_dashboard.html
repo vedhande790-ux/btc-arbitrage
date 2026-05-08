@@ -1,0 +1,830 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>ΔRBITRAGE — Live BTC Scanner</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --void:#050608;
+  --void2:#080a0d;
+  --panel:#0b0e12;
+  --panel2:#0f1318;
+  --rim:#1a2030;
+  --rim2:#222a38;
+  --amber:#f0a500;
+  --amber2:#d48a00;
+  --amber-dim:rgba(240,165,0,.12);
+  --amber-glow:rgba(240,165,0,.06);
+  --cyan:#00c2e0;
+  --cyan-dim:rgba(0,194,224,.1);
+  --red:#e04040;
+  --red-dim:rgba(224,64,64,.12);
+  --ghost:#2a3345;
+  --mist:#4a5568;
+  --fog:#6b7a96;
+  --bone:#c8d0e0;
+  --white:#e8edf5;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--void);color:var(--bone);font-family:"Space Mono",ui-monospace,monospace;font-size:11px;line-height:1.5;min-height:100vh;overflow-x:hidden}
+
+/* SCANLINES OVERLAY */
+body::before{
+  content:"";
+  position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.18) 2px,rgba(0,0,0,.18) 4px);
+  pointer-events:none;z-index:9999;opacity:.4;
+}
+
+.syne{font-family:"Syne",sans-serif}
+
+/* LAYOUT */
+.shell{display:grid;grid-template-rows:auto 1fr;min-height:100vh}
+.topbar{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:0 32px;height:52px;
+  border-bottom:1px solid var(--rim);
+  background:var(--panel);
+  position:sticky;top:0;z-index:100;
+}
+.topbar-brand{display:flex;align-items:center;gap:16px}
+.brand-mark{
+  width:28px;height:28px;
+  border:1px solid var(--amber);
+  transform:rotate(45deg);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.brand-mark-inner{width:10px;height:10px;background:var(--amber)}
+.brand-name{font-family:"Syne",sans-serif;font-weight:800;font-size:15px;letter-spacing:.06em;color:var(--white)}
+.brand-sub{font-size:9px;letter-spacing:.22em;color:var(--mist);text-transform:uppercase;margin-top:1px}
+.topbar-center{display:flex;gap:32px;align-items:center}
+.topbar-stat{text-align:center}
+.topbar-stat .lbl{font-size:8.5px;letter-spacing:.2em;color:var(--mist);text-transform:uppercase}
+.topbar-stat .val{font-size:13px;color:var(--white);font-variant-numeric:tabular-nums;letter-spacing:.04em}
+.topbar-stat .val.amber{color:var(--amber)}
+.topbar-stat .val.cyan{color:var(--cyan)}
+.topbar-right{display:flex;align-items:center;gap:20px}
+.pulse{display:flex;align-items:center;gap:7px;font-size:9px;letter-spacing:.18em;color:var(--mist);text-transform:uppercase}
+.pulse-dot{
+  width:6px;height:6px;border-radius:50%;background:var(--amber);
+  box-shadow:0 0 8px var(--amber);
+  animation:blink 2s ease-in-out infinite;
+}
+.pulse-dot.err{background:var(--red);box-shadow:0 0 8px var(--red)}
+.pulse-dot.wait{background:var(--mist);box-shadow:none;animation:none}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+#clock{font-size:11px;color:var(--bone);letter-spacing:.1em;font-variant-numeric:tabular-nums}
+.scan-count{
+  padding:2px 10px;border:1px solid var(--rim2);
+  font-size:9px;letter-spacing:.2em;color:var(--ghost);
+  text-transform:uppercase;
+}
+#scan-num-display{color:var(--fog);transition:color .3s}
+
+/* MAIN GRID */
+.main{
+  display:grid;
+  grid-template-columns:1fr 340px;
+  grid-template-rows:auto auto 1fr;
+  gap:1px;background:var(--rim);
+  border-top:1px solid var(--rim);
+}
+.pane{background:var(--void2);padding:24px}
+.pane-full{grid-column:1/-1}
+
+/* HERO */
+.hero{
+  grid-column:1/-1;
+  padding:48px 40px 32px;
+  background:var(--void2);
+  position:relative;overflow:hidden;
+}
+.hero-bg{
+  position:absolute;top:-60px;right:-60px;
+  width:400px;height:400px;
+  border:1px solid rgba(240,165,0,.07);
+  border-radius:50%;
+}
+.hero-bg2{
+  position:absolute;top:20px;right:20px;
+  width:240px;height:240px;
+  border:1px solid rgba(240,165,0,.05);
+  border-radius:50%;
+}
+.hero-grid{position:absolute;inset:0;
+  background-image:
+    linear-gradient(rgba(240,165,0,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(240,165,0,.025) 1px,transparent 1px);
+  background-size:40px 40px;
+}
+.hero-content{position:relative;z-index:1}
+.hero-eyebrow{
+  display:inline-flex;align-items:center;gap:8px;
+  border:1px solid var(--rim2);padding:4px 12px;
+  font-size:9px;letter-spacing:.26em;color:var(--mist);text-transform:uppercase;
+  margin-bottom:20px;
+}
+.hero-eyebrow-dot{width:4px;height:4px;background:var(--amber);border-radius:50%}
+.hero-h{
+  font-family:"Syne",sans-serif;font-weight:800;
+  font-size:72px;line-height:.92;letter-spacing:-.02em;
+  color:var(--white);
+}
+.hero-h span{color:var(--amber)}
+.hero-tagline{
+  margin-top:14px;font-size:10px;letter-spacing:.22em;
+  color:var(--mist);text-transform:uppercase;max-width:480px;
+}
+.hero-metrics{
+  display:flex;gap:40px;margin-top:32px;
+  padding-top:24px;border-top:1px solid var(--rim);
+}
+.h-metric .h-lbl{font-size:9px;letter-spacing:.2em;color:var(--mist);text-transform:uppercase}
+.h-metric .h-val{font-size:22px;color:var(--white);margin-top:4px;font-variant-numeric:tabular-nums}
+.h-metric .h-val em{font-style:normal;font-size:13px;color:var(--fog);margin-left:4px}
+.h-metric .h-val.pos{color:var(--amber)}
+.h-metric .h-val.cyan{color:var(--cyan)}
+
+/* SECTION HEADERS */
+.sec-head{
+  display:flex;justify-content:space-between;align-items:baseline;
+  margin-bottom:16px;padding-bottom:10px;
+  border-bottom:1px solid var(--rim);
+}
+.sec-head .sl{font-size:9px;letter-spacing:.26em;color:var(--amber);text-transform:uppercase}
+.sec-head .sr{font-size:9px;letter-spacing:.2em;color:var(--ghost)}
+
+/* LEDGER TABLE */
+.ledger-wrap{overflow-x:auto}
+table.ledger{width:100%;border-collapse:collapse;font-size:10.5px}
+table.ledger thead th{
+  text-align:left;padding:7px 10px;
+  font-size:8.5px;letter-spacing:.22em;color:var(--mist);text-transform:uppercase;
+  border-bottom:1px solid var(--rim);font-weight:400;
+}
+table.ledger tbody td{
+  padding:10px 10px;border-bottom:1px solid rgba(26,32,48,.8);
+  color:var(--bone);vertical-align:middle;
+}
+table.ledger tbody tr{cursor:pointer;transition:background .12s}
+table.ledger tbody tr:hover td{background:rgba(240,165,0,.04)}
+table.ledger tbody tr.active td{background:rgba(240,165,0,.07)}
+table.ledger tbody tr.active td:first-child{
+  box-shadow:inset 2px 0 0 var(--amber);
+}
+.lex-route{color:var(--bone);letter-spacing:.06em}
+.lex-route .arr{color:var(--amber);margin:0 7px;opacity:.7}
+.lex-buy{color:var(--cyan);font-size:10px}
+.lex-sell{color:var(--bone);font-size:10px}
+.lex-spread{font-variant-numeric:tabular-nums;color:var(--amber)}
+.lex-spread.neg{color:var(--red)}
+.lex-profit{font-variant-numeric:tabular-nums;color:var(--white)}
+.badge{
+  display:inline-block;padding:2px 8px;font-size:8.5px;letter-spacing:.18em;
+  text-transform:uppercase;
+}
+.badge.HIGH{background:rgba(240,165,0,.14);color:var(--amber);border:1px solid rgba(240,165,0,.3)}
+.badge.MEDIUM{background:rgba(200,208,224,.07);color:var(--bone);border:1px solid var(--rim2)}
+.badge.LOW{background:var(--cyan-dim);color:var(--cyan);border:1px solid rgba(0,194,224,.25)}
+.badge.RISKY{background:var(--red-dim);color:var(--red);border:1px solid rgba(224,64,64,.3)}
+.bars{display:inline-flex;gap:2px;align-items:flex-end}
+.bars span{width:5px;background:var(--rim2);display:block}
+.bars span.on{background:var(--amber)}
+.empty-state{text-align:center;padding:36px;color:var(--mist);font-style:italic;font-size:12px}
+
+/* TAPE CHART */
+.tape-wrap{position:relative;height:180px;margin:0 -24px;padding:0 24px}
+.tape-wrap svg{position:absolute;inset:0;width:100%;height:100%}
+.tape-current{
+  position:absolute;top:8px;right:24px;
+  font-size:18px;color:var(--amber);font-variant-numeric:tabular-nums;
+  letter-spacing:-.01em;
+}
+.tape-mu{
+  position:absolute;right:24px;
+  font-size:9px;color:var(--mist);letter-spacing:.16em;
+}
+.tape-yaxis{
+  position:absolute;left:0;top:0;bottom:0;
+  display:flex;flex-direction:column;justify-content:space-between;
+  padding:4px 0;font-size:8.5px;color:var(--ghost);
+  font-variant-numeric:tabular-nums;width:36px;
+}
+.tape-xaxis{
+  position:absolute;bottom:-14px;left:36px;right:0;
+  display:flex;justify-content:space-between;
+  font-size:8.5px;color:var(--ghost);
+}
+
+/* DETAIL PANEL */
+.detail-pane{
+  grid-column:2;
+  grid-row:2/4;
+  background:var(--panel);
+  border-left:1px solid var(--rim);
+  display:flex;flex-direction:column;
+  gap:1px;
+}
+.detail-section{padding:20px;border-bottom:1px solid var(--rim)}
+.detail-section:last-child{border-bottom:none}
+
+/* DEPTH */
+.depth-header{display:flex;justify-content:space-between;margin-bottom:10px;font-size:9px;letter-spacing:.18em;text-transform:uppercase}
+.depth-header .buy-lbl{color:var(--cyan)}
+.depth-header .sell-lbl{color:var(--red)}
+.depth-grid{display:grid;grid-template-columns:1fr 1px 1fr;height:180px;gap:0}
+.depth-side{display:flex;flex-direction:column;justify-content:center;gap:2.5px}
+.depth-divider{background:var(--rim)}
+.depth-bar{height:6px;border-radius:1px}
+.depth-bar.bid{background:linear-gradient(90deg,transparent,var(--cyan));align-self:flex-end;margin-left:auto}
+.depth-bar.ask{background:linear-gradient(90deg,var(--red),transparent)}
+.depth-prices{display:flex;justify-content:space-between;margin-top:8px;font-size:10px;font-variant-numeric:tabular-nums;color:var(--bone)}
+
+/* ROUTE SVG */
+.route-svg-wrap{margin:0 -4px}
+
+/* EXEC PANEL */
+.exec-dl{display:grid;grid-template-columns:1fr auto;row-gap:8px;column-gap:8px;font-size:10px}
+.exec-dl dt{color:var(--mist);letter-spacing:.14em;font-size:9px;text-transform:uppercase;align-self:center}
+.exec-dl dd{text-align:right;color:var(--bone);font-variant-numeric:tabular-nums}
+.exec-net{
+  margin-top:16px;padding:14px;
+  background:var(--amber-glow);
+  border:1px solid rgba(240,165,0,.2);
+}
+.exec-net .en-lbl{font-size:8.5px;letter-spacing:.22em;color:var(--amber);text-transform:uppercase}
+.exec-net .en-val{
+  font-family:"Syne",sans-serif;font-weight:800;
+  font-size:30px;color:var(--amber);margin-top:4px;
+  font-variant-numeric:tabular-nums;
+}
+.exec-net .en-val.neg{color:var(--red)}
+.exec-net .en-pct{font-size:12px;color:var(--amber2);margin-left:6px}
+.exec-btn{
+  margin-top:12px;width:100%;
+  background:transparent;border:1px solid var(--amber2);
+  color:var(--white);padding:10px;
+  font-family:"Space Mono",monospace;font-size:9px;letter-spacing:.28em;
+  cursor:pointer;text-transform:uppercase;
+  transition:all .2s ease;position:relative;overflow:hidden;
+}
+.exec-btn::before{
+  content:"";position:absolute;inset:0;
+  background:var(--amber);
+  transform:translateX(-100%);
+  transition:transform .3s ease;
+}
+.exec-btn:hover::before{transform:translateX(0)}
+.exec-btn span{position:relative;z-index:1}
+.exec-btn:hover span{color:var(--void)}
+.exec-btn:disabled{opacity:.35;cursor:not-allowed}
+.exec-btn:disabled::before{display:none}
+.exec-notes{
+  margin-top:10px;font-size:9.5px;color:var(--mist);
+  line-height:1.5;font-style:italic;
+}
+
+/* MATRIX */
+.matrix-grid{display:grid;grid-template-columns:auto 1fr;gap:32px;align-items:start}
+table.matrix{border-collapse:separate;border-spacing:3px}
+table.matrix th{
+  font-size:8.5px;color:var(--mist);padding:3px 5px;
+  letter-spacing:.14em;font-weight:400;text-transform:uppercase;
+}
+table.matrix td{
+  width:38px;height:26px;text-align:center;
+  font-size:8.5px;color:var(--bone);
+  font-variant-numeric:tabular-nums;
+  transition:filter .2s;
+}
+table.matrix td:hover{filter:brightness(1.3);cursor:pointer}
+table.matrix td.diag{background:transparent!important;color:var(--rim2)}
+.matrix-legend{font-size:9.5px}
+.ml-row{display:flex;align-items:center;gap:10px;padding:4px 0;letter-spacing:.14em;text-transform:uppercase;font-size:9px}
+.ml-sw{width:12px;height:12px;flex-shrink:0}
+.ml-lbl{color:var(--bone);width:70px}
+.ml-desc{color:var(--mist)}
+
+/* BEST OPP BANNER */
+.best-banner{
+  grid-column:1/-1;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 32px;
+  background:linear-gradient(90deg,rgba(240,165,0,.1),rgba(240,165,0,.04));
+  border-top:1px solid rgba(240,165,0,.25);
+  border-bottom:1px solid var(--rim);
+}
+.bb-label{font-size:8.5px;letter-spacing:.26em;color:var(--amber);text-transform:uppercase}
+.bb-route{font-size:13px;color:var(--white);margin-top:2px;font-family:"Syne",sans-serif;font-weight:700}
+.bb-meta{display:flex;gap:32px;align-items:center}
+.bb-item .lbl{font-size:8px;letter-spacing:.2em;color:var(--mist);text-transform:uppercase}
+.bb-item .val{font-size:14px;color:var(--amber);font-variant-numeric:tabular-nums;margin-top:1px}
+
+/* FOOTER */
+footer{
+  grid-column:1/-1;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:12px 32px;background:var(--panel);
+  border-top:1px solid var(--rim);
+  font-size:8.5px;letter-spacing:.2em;color:var(--ghost);text-transform:uppercase;
+}
+footer .fl{display:flex;gap:24px}
+.footer-tag{padding:1px 8px;border:1px solid var(--rim2);color:var(--ghost);font-size:8px}
+
+/* ANIMATIONS */
+@keyframes fadeSlide{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.fade-in{animation:fadeSlide .3s ease forwards}
+@keyframes numberTick{from{color:var(--amber)}to{color:inherit}}
+.tick{animation:numberTick 1s ease}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--void)}
+::-webkit-scrollbar-thumb{background:var(--rim2);border-radius:2px}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- TOP BAR -->
+<nav class="topbar">
+  <div class="topbar-brand">
+    <div class="brand-mark"><div class="brand-mark-inner"></div></div>
+    <div>
+      <div class="brand-name syne">ΔRBITRAGE</div>
+      <div class="brand-sub">BTC · Cross-Venue Scanner</div>
+    </div>
+  </div>
+  <div class="topbar-center">
+    <div class="topbar-stat"><div class="lbl">Best Net</div><div class="val amber" id="tb-best">—</div></div>
+    <div class="topbar-stat"><div class="lbl">Venues</div><div class="val cyan" id="tb-venues">—</div></div>
+    <div class="topbar-stat"><div class="lbl">Opportunities</div><div class="val" id="tb-opps">—</div></div>
+    <div class="topbar-stat"><div class="lbl">BTC Price</div><div class="val" id="tb-price">—</div></div>
+  </div>
+  <div class="topbar-right">
+    <div class="pulse">
+      <div class="pulse-dot wait" id="status-dot"></div>
+      <span id="status-text">CONNECTING</span>
+    </div>
+    <div id="clock">00:00:00</div>
+    <div class="scan-count">SCAN <span id="scan-num-display">00</span></div>
+  </div>
+</nav>
+
+<!-- MAIN CONTENT -->
+<div class="main">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-grid"></div>
+    <div class="hero-bg"></div>
+    <div class="hero-bg2"></div>
+    <div class="hero-content">
+      <div class="hero-eyebrow"><div class="hero-eyebrow-dot"></div>Live Market Intelligence</div>
+      <h1 class="hero-h">ARBI<span>TRAGE</span></h1>
+      <div class="hero-tagline">cross-venue price discovery · modeled execution costs · confidence-ranked opportunities</div>
+      <div class="hero-metrics">
+        <div class="h-metric"><div class="h-lbl">Best Net Spread</div><div class="h-val pos" id="h-best-net">—</div></div>
+        <div class="h-metric"><div class="h-lbl">Best Profit (0.1 BTC)</div><div class="h-val" id="h-best-profit">—</div></div>
+        <div class="h-metric"><div class="h-lbl">Active Venues</div><div class="h-val cyan" id="h-venues">—</div></div>
+        <div class="h-metric"><div class="h-lbl">Avg Transfer</div><div class="h-val" id="h-avg-transfer">—<em>min</em></div></div>
+        <div class="h-metric"><div class="h-lbl">Scan Interval</div><div class="h-val">30<em>s</em></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BEST BANNER -->
+  <div class="best-banner" id="best-banner" style="display:none">
+    <div>
+      <div class="bb-label">★ Top Opportunity</div>
+      <div class="bb-route" id="bb-route">—</div>
+    </div>
+    <div class="bb-meta">
+      <div class="bb-item"><div class="lbl">Buy</div><div class="val" id="bb-buy">—</div></div>
+      <div class="bb-item"><div class="lbl">Sell</div><div class="val" id="bb-sell">—</div></div>
+      <div class="bb-item"><div class="lbl">Net Spread</div><div class="val" id="bb-net">—</div></div>
+      <div class="bb-item"><div class="lbl">Net Profit</div><div class="val" id="bb-profit">—</div></div>
+      <div class="bb-item"><div class="lbl">Confidence</div><div class="val" id="bb-conf">—</div></div>
+    </div>
+  </div>
+
+  <!-- LEFT COLUMN: LEDGER + TAPE + MATRIX -->
+  <div style="grid-column:1;display:flex;flex-direction:column;gap:1px;background:var(--rim)">
+
+    <!-- LEDGER -->
+    <div class="pane">
+      <div class="sec-head">
+        <div class="sl">I · Opportunity Ledger · BTC/USD</div>
+        <div class="sr">fig. 01</div>
+      </div>
+      <div class="ledger-wrap">
+        <table class="ledger">
+          <thead>
+            <tr>
+              <th>Route</th>
+              <th>Buy</th>
+              <th>Sell</th>
+              <th>Gross</th>
+              <th>Net Spread</th>
+              <th>Net Profit</th>
+              <th>Confidence</th>
+              <th>Signal</th>
+            </tr>
+          </thead>
+          <tbody id="ledger-body">
+            <tr><td colspan="8" class="empty-state">awaiting first scan…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAPE -->
+    <div class="pane" style="padding-bottom:32px">
+      <div class="sec-head">
+        <div class="sl">II · Spread Tape · Best Route · Rolling</div>
+        <div class="sr">fig. 02</div>
+      </div>
+      <div class="tape-wrap">
+        <div class="tape-yaxis" id="tape-yaxis"></div>
+        <svg viewBox="0 0 1000 180" preserveAspectRatio="none" style="position:absolute;left:36px;top:0;width:calc(100% - 36px);height:100%">
+          <defs>
+            <linearGradient id="tapeGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#f0a500" stop-opacity=".25"/>
+              <stop offset="100%" stop-color="#f0a500" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <line id="mu-line" x1="0" y1="90" x2="1000" y2="90" stroke="rgba(240,165,0,.2)" stroke-dasharray="4 6" stroke-width=".8"/>
+          <path id="tape-fill" fill="url(#tapeGrad)" stroke="none"/>
+          <path id="tape-path" fill="none" stroke="#f0a500" stroke-width="1.5" stroke-linejoin="round"/>
+          <circle id="tape-dot" r="5" fill="#f0a500" stroke="#050608" stroke-width="2"/>
+        </svg>
+        <div class="tape-current" id="tape-price">—</div>
+        <div class="tape-mu" id="tape-mu" style="top:84px">—</div>
+        <div class="tape-xaxis"><span>oldest</span><span>now</span></div>
+      </div>
+    </div>
+
+    <!-- MATRIX -->
+    <div class="pane">
+      <div class="sec-head">
+        <div class="sl">IV · Venue Matrix · Net Spread Heatmap</div>
+        <div class="sr">fig. 06</div>
+      </div>
+      <div class="matrix-grid">
+        <table class="matrix" id="matrix"></table>
+        <div class="matrix-legend">
+          <div class="ml-row"><span class="ml-sw" style="background:rgba(240,165,0,.8)"></span><span class="ml-lbl">Amber</span><span class="ml-desc">Profitable arb (&gt;0.25%)</span></div>
+          <div class="ml-row"><span class="ml-sw" style="background:var(--rim2)"></span><span class="ml-lbl">Dim</span><span class="ml-desc">Sub-threshold edge</span></div>
+          <div class="ml-row"><span class="ml-sw" style="background:rgba(0,194,224,.5)"></span><span class="ml-lbl">Cyan</span><span class="ml-desc">Near breakeven</span></div>
+          <div class="ml-row"><span class="ml-sw" style="background:rgba(224,64,64,.5)"></span><span class="ml-lbl">Red</span><span class="ml-desc">Negative edge / loss</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT COLUMN: DETAIL PANE -->
+  <div class="detail-pane">
+
+    <!-- DEPTH -->
+    <div class="detail-section">
+      <div class="sec-head">
+        <div class="sl">III · Depth</div><div class="sr">fig. 03</div>
+      </div>
+      <div class="depth-header">
+        <span class="buy-lbl" id="dlabel-buy">BUY</span>
+        <span class="sell-lbl" id="dlabel-sell">SELL</span>
+      </div>
+      <div class="depth-grid">
+        <div class="depth-side" id="depth-bids"></div>
+        <div class="depth-divider"></div>
+        <div class="depth-side" id="depth-asks"></div>
+      </div>
+      <div class="depth-prices">
+        <span id="dprice-buy">—</span>
+        <span id="dprice-sell">—</span>
+      </div>
+    </div>
+
+    <!-- ROUTE -->
+    <div class="detail-section">
+      <div class="sec-head">
+        <div class="sl">III · Route</div><div class="sr">fig. 04</div>
+      </div>
+      <div class="route-svg-wrap">
+        <svg class="route-svg" id="route-svg" viewBox="0 0 300 180" style="width:100%;height:180px;display:block"></svg>
+      </div>
+    </div>
+
+    <!-- EXECUTION -->
+    <div class="detail-section" style="flex:1">
+      <div class="sec-head">
+        <div class="sl">V · Execution</div><div class="sr">fig. 05</div>
+      </div>
+      <dl class="exec-dl" id="exec-dl">
+        <dt>Notional</dt><dd id="ex-notional">—</dd>
+        <dt>Gross Spread</dt><dd id="ex-gross">—</dd>
+        <dt>Buy Taker</dt><dd id="ex-buyfee">—</dd>
+        <dt>Sell Taker</dt><dd id="ex-sellfee">—</dd>
+        <dt>Withdrawal</dt><dd id="ex-wd">—</dd>
+        <dt>Transfer Time</dt><dd id="ex-transfer">—</dd>
+      </dl>
+      <div class="exec-net">
+        <div class="en-lbl">Net Profit · 0.1 BTC</div>
+        <div class="en-val" id="ex-net">$0.00</div>
+      </div>
+      <button class="exec-btn" id="ex-btn" disabled><span>Hold 3s · Execute Trade</span></button>
+      <div class="exec-notes" id="ex-notes">—</div>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="fl">
+      <span>Δ Arbitrage Engine v3.0.0</span>
+      <span class="footer-tag">RUST PORT</span>
+      <span>Data: CoinGecko</span>
+      <span>Scan: 30s</span>
+    </div>
+    <div>"the spread is a small silence between two prices."</div>
+  </footer>
+
+</div><!-- .main -->
+</div><!-- .shell -->
+
+<script>
+/* === STATE === */
+let scanNum=0, tapeHistory=[], lastPrices=[], lastOpps=[];
+
+/* === UTILS === */
+function fmtUSD(v){return(v<0?'-$':'$')+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function fmtPct2(v){return(v>=0?'+':'')+v.toFixed(3)+'%'}
+function signalBars(pct){
+  const n=Math.max(0,Math.min(8,Math.round((pct/1.5)*8)));
+  return `<span class="bars">${Array.from({length:8},(_,i)=>`<span class="${i<n?'on':''}" style="height:${6+i*1.5}px"></span>`).join('')}</span>`;
+}
+
+function setStatus(state,text){
+  const dot=document.getElementById('status-dot');
+  dot.className='pulse-dot'+(state==='ok'?'':state==='err'?' err':' wait');
+  document.getElementById('status-text').textContent=text;
+}
+
+/* === RENDERING === */
+function renderLedger(opps){
+  const body=document.getElementById('ledger-body');
+  const top=opps.slice(0,12);
+  if(!top.length){
+    body.innerHTML='<tr><td colspan="8" class="empty-state">no positive net opportunities this scan</td></tr>';
+    return;
+  }
+  body.innerHTML=top.map((o,i)=>`
+    <tr class="${i===0?'active':''} fade-in" data-idx="${i}" style="animation-delay:${i*.03}s">
+      <td class="lex-route">${o.buy_exchange}<span class="arr">→</span>${o.sell_exchange}</td>
+      <td class="lex-buy">$${o.buy_price.toLocaleString('en-US',{maximumFractionDigits:2})}</td>
+      <td class="lex-sell">$${o.sell_price.toLocaleString('en-US',{maximumFractionDigits:2})}</td>
+      <td class="lex-spread ${o.gross_spread_pct<0?'neg':''}">${fmtPct2(o.gross_spread_pct)}</td>
+      <td class="lex-spread ${o.net_after_all_pct<0?'neg':''}">${fmtPct2(o.net_after_all_pct)}</td>
+      <td class="lex-profit">${fmtUSD(o.net_profit_usd)}</td>
+      <td><span class="badge ${o.confidence}">${o.confidence}</span></td>
+      <td>${signalBars(o.net_after_all_pct)}</td>
+    </tr>
+  `).join('');
+  body.querySelectorAll('tr').forEach(tr=>{
+    tr.addEventListener('click',()=>{
+      body.querySelectorAll('tr').forEach(x=>x.classList.remove('active'));
+      tr.classList.add('active');
+      renderDetail(lastOpps[+tr.dataset.idx]);
+    });
+  });
+}
+
+function renderTape(){
+  const W=1000,H=180;
+  const vals=tapeHistory;
+  if(vals.length<2){document.getElementById('tape-path').setAttribute('d','');return;}
+  const lo=Math.min(...vals,0),hi=Math.max(...vals,1);
+  const range=Math.max(.1,hi-lo),pad=range*.15;
+  const yLo=lo-pad,yHi=hi+pad;
+  const sy=v=>H-((v-yLo)/(yHi-yLo))*H;
+  const pts=vals.map((v,i)=>[(i/(vals.length-1))*W,sy(v)]);
+  const d=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  document.getElementById('tape-path').setAttribute('d',d);
+  const fillD=d+` L${pts[pts.length-1][0]} ${H} L0 ${H} Z`;
+  document.getElementById('tape-fill').setAttribute('d',fillD);
+  const last=pts[pts.length-1];
+  const dot=document.getElementById('tape-dot');
+  dot.setAttribute('cx',last[0]);dot.setAttribute('cy',last[1]);
+  document.getElementById('tape-price').textContent=fmtPct2(vals[vals.length-1]);
+  const mu=vals.reduce((a,b)=>a+b,0)/vals.length;
+  const muY=sy(mu);
+  document.getElementById('mu-line').setAttribute('y1',muY);
+  document.getElementById('mu-line').setAttribute('y2',muY);
+  document.getElementById('tape-mu').textContent='μ = '+mu.toFixed(2)+'%';
+  document.getElementById('tape-mu').style.top=(muY*(180/H)-6)+'px';
+  const ya=document.getElementById('tape-yaxis');
+  ya.innerHTML='';
+  for(let i=0;i<5;i++){
+    const v=yHi-(i/4)*(yHi-yLo);
+    const s=document.createElement('span');s.textContent=v.toFixed(2)+'%';ya.appendChild(s);
+  }
+}
+
+function renderDepth(opp){
+  document.getElementById('dlabel-buy').textContent=opp.buy_exchange.toUpperCase();
+  document.getElementById('dlabel-sell').textContent=opp.sell_exchange.toUpperCase();
+  // Find raw prices for exchanges
+  const rawBuy = lastPrices.find(p => p.exchange === opp.buy_exchange);
+  const rawSell = lastPrices.find(p => p.exchange === opp.sell_exchange);
+  if(!rawBuy || !rawSell) return;
+
+  document.getElementById('dprice-buy').textContent='$'+rawBuy.ask.toLocaleString('en-US',{maximumFractionDigits:2});
+  document.getElementById('dprice-sell').textContent='$'+rawSell.bid.toLocaleString('en-US',{maximumFractionDigits:2});
+  const bids=document.getElementById('depth-bids'),asks=document.getElementById('depth-asks');
+  bids.innerHTML='';asks.innerHTML='';
+  const N=20,lqB=rawBuy.liquidity_score,lqS=rawSell.liquidity_score;
+  for(let i=0;i<N;i++){
+    const t=i/(N-1);
+    const fall=Math.pow(1-Math.abs(t-.5)*2,1.2);
+    const wB=Math.max(5,fall*95*lqB*(0.8+Math.random()*.4));
+    const wA=Math.max(5,fall*95*lqS*(0.8+Math.random()*.4));
+    const b=document.createElement('div');b.className='depth-bar bid';b.style.width=wB+'%';
+    const a=document.createElement('div');a.className='depth-bar ask';a.style.width=wA+'%';
+    bids.appendChild(b);asks.appendChild(a);
+  }
+}
+
+function renderRoute(opp,prices){
+  const svg=document.getElementById('route-svg');
+  const venues=prices.slice(0,5).map(p=>p.exchange);
+  if(!venues.includes(opp.buy_exchange))venues.unshift(opp.buy_exchange);
+  if(!venues.includes(opp.sell_exchange))venues.push(opp.sell_exchange);
+  const W=300,H=180;
+  const layout={};
+  const others=venues.filter(v=>v!==opp.buy_exchange&&v!==opp.sell_exchange).slice(0,4);
+  layout[opp.buy_exchange]={x:55,y:60};
+  layout[opp.sell_exchange]={x:245,y:60};
+  others.forEach((v,i)=>{layout[v]={x:55+(i+.5)*(190/Math.max(1,others.length)),y:145}});
+  let html='';
+  const keys=Object.keys(layout);
+  for(let i=0;i<keys.length;i++)for(let j=i+1;j<keys.length;j++){
+    const a=layout[keys[i]],b=layout[keys[j]];
+    html+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="rgba(26,32,48,.8)" stroke-width=".7"/>`;
+  }
+  const A=layout[opp.buy_exchange],B=layout[opp.sell_exchange];
+  html+=`<line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="#f0a500" stroke-width="1.8"/>`;
+  const mx=(A.x+B.x)/2,my=(A.y+B.y)/2-18;
+  html+=`<text x="${mx}" y="${my}" text-anchor="middle" fill="#f0a500" font-size="7.5" font-family="Space Mono" letter-spacing="1.5">ACTIVE · ${opp.avg_transfer_minutes.toFixed(0)}m</text>`;
+  for(const k of keys){
+    const p=layout[k];
+    const isActive=(k===opp.buy_exchange||k===opp.sell_exchange);
+    const r=isActive?6:4;
+    const fill=isActive?'#f0a500':'#0f1318';
+    const stroke=isActive?'#f0a500':'#2a3345';
+    html+=`<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="1.2"/>`;
+    if(isActive)html+=`<circle cx="${p.x}" cy="${p.y}" r="${r+5}" fill="none" stroke="rgba(240,165,0,.2)" stroke-width="1"/>`;
+    const ty=p.y+(isActive?20:16);
+    const color=isActive?'#c8d0e0':'#4a5568';
+    const name=k.replace(/[^a-zA-Z0-9]/g,'').toUpperCase().slice(0,7);
+    html+=`<text x="${p.x}" y="${ty}" text-anchor="middle" fill="${color}" font-size="7" font-family="Space Mono" letter-spacing="1">${name}</text>`;
+  }
+  svg.innerHTML=html;
+}
+
+function renderExec(opp){
+  const rawBuy = lastPrices.find(p => p.exchange === opp.buy_exchange);
+  const rawSell = lastPrices.find(p => p.exchange === opp.sell_exchange);
+  if(!rawBuy || !rawSell) return;
+
+  const notional=rawBuy.ask*0.1; // Using 0.1 BTC as default trade size for display
+  document.getElementById('ex-notional').textContent='USD '+notional.toLocaleString('en-US',{maximumFractionDigits:0});
+  document.getElementById('ex-gross').textContent=fmtPct2(opp.gross_spread_pct);
+  document.getElementById('ex-buyfee').textContent=(rawBuy.taker_fee*100).toFixed(3)+'%';
+  document.getElementById('ex-sellfee').textContent=(rawSell.taker_fee*100).toFixed(3)+'%';
+  document.getElementById('ex-wd').textContent=fmtUSD(rawBuy.withdrawal_fee * rawBuy.ask);
+  document.getElementById('ex-transfer').textContent=opp.avg_transfer_minutes.toFixed(0)+' min';
+  const net=document.getElementById('ex-net');
+  const v=opp.net_profit_usd;
+  net.className='en-val'+(v<0?' neg':'');
+  net.innerHTML=`${v>=0?'+':'−'}${fmtUSD(Math.abs(v))}<span class="en-pct">${fmtPct2(opp.net_after_all_pct)}</span>`;
+  document.getElementById('ex-notes').textContent=opp.notes;
+  const btn=document.getElementById('ex-btn');
+  btn.disabled=v<=0;
+}
+
+function renderDetail(opp){
+  if(!opp) return;
+  renderDepth(opp);
+  renderRoute(opp,lastPrices);
+  renderExec(opp);
+}
+
+function renderMatrix(prices,opps){
+  const venues=prices.slice(0,8);
+  const codes=venues.map(v=>v.exchange.replace(/[^A-Z]/gi,'').toUpperCase().slice(0,3)||v.exchange.toUpperCase().slice(0,3));
+  const lookup={};
+  for(const o of opps)lookup[o.buy_exchange+'|'+o.sell_exchange]=o.net_after_all_pct;
+  const tbl=document.getElementById('matrix');
+  let html='<thead><tr><th></th>'+codes.map(c=>'<th>'+c+'</th>').join('')+'</tr></thead><tbody>';
+  for(let i=0;i<venues.length;i++){
+    html+='<tr><th>'+codes[i]+'</th>';
+    for(let j=0;j<venues.length;j++){
+      if(i===j){html+='<td class="diag">·</td>';continue;}
+      const v=lookup[venues[i].exchange+'|'+venues[j].exchange];
+      if(v===undefined){html+='<td style="background:#0f1318;color:#2a3345">—</td>';continue;}
+      let bg,color='#c8d0e0';
+      if(v>=0.25){const k=Math.min(1,(v-.25)/.8);bg=`rgba(240,165,0,${.2+k*.65})`;color=k>.6?'#050608':'#e8edf5';}
+      else if(v>=0){bg=`rgba(0,194,224,${.08+(v/.25)*.2})`;}
+      else{const k=Math.min(1,-v/.5);bg=`rgba(224,64,64,${.12+k*.35})`;}
+      html+=`<td style="background:${bg};color:${color}">${v.toFixed(2)}</td>`;
+    }
+    html+='</tr>';
+  }
+  html+='</tbody>';
+  tbl.innerHTML=html;
+}
+
+function renderTopBar(prices,opps,best){
+  document.getElementById('tb-best').textContent=best?fmtPct2(best.net_after_all_pct):'—';
+  document.getElementById('tb-venues').textContent=prices.length;
+  document.getElementById('tb-opps').textContent=opps.length;
+  if(prices.length)document.getElementById('tb-price').textContent='$'+prices[0].last.toLocaleString('en-US',{maximumFractionDigits:0});
+}
+
+function renderHero(prices,opps,best){
+  document.getElementById('h-best-net').textContent=best?fmtPct2(best.net_after_all_pct):'—';
+  document.getElementById('h-best-profit').textContent=best?fmtUSD(best.net_profit_usd):'—';
+  document.getElementById('h-venues').textContent=prices.length;
+  if(opps.length){
+    const avg=opps.slice(0,5).reduce((a,o)=>a+o.avg_transfer_minutes,0)/Math.min(5,opps.length);
+    document.getElementById('h-avg-transfer').innerHTML=avg.toFixed(0)+'<em>min</em>';
+  }
+}
+
+function renderBestBanner(best){
+  const b=document.getElementById('best-banner');
+  if(!best){b.style.display='none';return;}
+  b.style.display='flex';
+  document.getElementById('bb-route').textContent=`${best.buy_exchange}  →  ${best.sell_exchange}`;
+  document.getElementById('bb-buy').textContent='$'+best.buy_price.toLocaleString('en-US',{maximumFractionDigits:2});
+  document.getElementById('bb-sell').textContent='$'+best.sell_price.toLocaleString('en-US',{maximumFractionDigits:2});
+  document.getElementById('bb-net').textContent=fmtPct2(best.net_after_all_pct);
+  document.getElementById('bb-profit').textContent=fmtUSD(best.net_profit_usd);
+  document.getElementById('bb-conf').textContent=best.confidence;
+}
+
+/* === SCAN LOOP === */
+async function scan(){
+  setStatus('wait','SCANNING');
+  try{
+    const r = await fetch('/api/state',{headers:{'Accept':'application/json'}});
+    if(!r.ok) throw new Error('Backend API '+r.status);
+    const state = await r.json();
+    
+    lastPrices=state.prices;
+    lastOpps=state.opportunities;
+    scanNum = state.scan_id;
+
+    const sn=document.getElementById('scan-num-display');
+    sn.textContent=String(scanNum).padStart(2,'0');
+    sn.classList.add('tick');setTimeout(()=>sn.classList.remove('tick'),1000);
+    
+    const best=lastOpps[0]||null;
+    renderLedger(lastOpps);
+    if(best){
+      tapeHistory.push(best.net_after_all_pct);
+      if(tapeHistory.length>120)tapeHistory.shift();
+      renderTape();
+      renderDetail(best);
+    }
+    renderMatrix(lastPrices,lastOpps);
+    renderTopBar(lastPrices,lastOpps,best);
+    renderHero(lastPrices,lastOpps,best);
+    renderBestBanner(best);
+    setStatus('ok','LIVE · '+lastPrices.length+' VENUES');
+  }catch(e){
+    console.error(e);
+    setStatus('err','API ERROR — RETRYING');
+  }
+}
+
+function tick(){
+  const d=new Date(),p=n=>String(n).padStart(2,'0');
+  document.getElementById('clock').textContent='UTC '+p(d.getUTCHours())+':'+p(d.getUTCMinutes())+':'+p(d.getUTCSeconds());
+}
+setInterval(tick,1000);tick();
+scan();
+setInterval(scan,30000);
+
+document.getElementById('ex-btn').addEventListener('click', () => {
+    alert('Mock Trade Execution Sent to Engine Core');
+});
+</script>
+</body>
+</html>

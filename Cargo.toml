@@ -1,0 +1,68 @@
+[package]
+name = "crypto_arbitrage"
+version = "5.0.0"
+edition = "2021"
+rust-version = "1.75"
+authors = ["Quantitative Infrastructure Team"]
+description = "Institutional-grade real-time BTC arbitrage engine with L2 depth modeling and fault-tolerant architecture"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+futures-util = "0.3"
+
+# Network & WebSockets
+axum = "0.8"
+tower-http = { version = "0.6", features = ["cors", "fs"] }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
+reqwest = { version = "0.13", features = ["json", "rustls"] }
+rustls = { version = "0.23", features = ["ring"] }
+url = "2.5"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Performance & Concurrency
+dashmap = "6.1"
+parking_lot = "0.12"
+arc-swap = "1.7"
+petgraph = "0.7"
+ordered-float = { version = "4.6", features = ["serde"] }
+
+# Math & Financial Precision
+rust_decimal = { version = "1.36", features = ["serde-float"] }
+rust_decimal_macros = "1.36"
+chrono = { version = "0.4", features = ["serde"] }
+num-traits = "0.2"
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "macros"] }
+
+# Structured logging & Metrics
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+metrics = "0.24"
+metrics-exporter-prometheus = "0.16"
+
+# Error handling
+thiserror = "2"
+
+# CLI configuration
+clap = { version = "4", features = ["derive", "env"] }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
