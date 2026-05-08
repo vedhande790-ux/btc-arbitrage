@@ -346,6 +346,13 @@ footer .fl{display:flex;gap:24px}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:var(--void)}
 ::-webkit-scrollbar-thumb{background:var(--rim2);border-radius:2px}
+.price-list{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+.price-item{display:grid;grid-template-columns:minmax(72px,1fr) minmax(86px,auto);gap:6px 10px;padding:9px 12px;background:var(--void);border:1px solid var(--rim2);font-size:11px}
+.price-item .venue-name{color:var(--fog);text-transform:uppercase}
+.price-item .venue-price{color:var(--white);font-weight:700}
+.price-item .venue-meta{grid-column:1/-1;display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:9px;text-transform:uppercase}
+.price-item .venue-source{color:var(--gold)}
+.price-item .venue-source.modeled{color:var(--cyan)}
 </style>
 </head>
 <body>
@@ -490,6 +497,16 @@ footer .fl{display:flex;gap:24px}
 
   <!-- RIGHT COLUMN: DETAIL PANE -->
   <div class="detail-pane">
+    
+    <!-- VENUE STATUS -->
+    <div class="detail-section">
+      <div class="sec-head">
+        <div class="sl">II · Venue Status</div><div class="sr">fig. 03</div>
+      </div>
+      <div id="venue-price-list" class="price-list">
+        <!-- Populated by JS -->
+      </div>
+    </div>
 
     <!-- DEPTH -->
     <div class="detail-section">
@@ -581,7 +598,7 @@ function renderLedger(opps){
   const body=document.getElementById('ledger-body');
   const top=opps.slice(0,12);
   if(!top.length){
-    body.innerHTML='<tr><td colspan="8" class="empty-state">no positive net opportunities this scan</td></tr>';
+    body.innerHTML='<tr><td colspan="8" class="empty-state">scanning for opportunities...</td></tr>';
     return;
   }
   body.innerHTML=top.map((o,i)=>`
@@ -735,7 +752,11 @@ function renderMatrix(prices,opps){
   for(let i=0;i<venues.length;i++){
     html+='<tr><th>'+codes[i]+'</th>';
     for(let j=0;j<venues.length;j++){
-      if(i===j){html+='<td class="diag">·</td>';continue;}
+      if(i===j){
+        const p = venues[i].last ? '$'+Math.round(venues[i].last) : '·';
+        html+=`<td class="diag">${p}</td>`;
+        continue;
+      }
       const v=lookup[venues[i].exchange+'|'+venues[j].exchange];
       if(v===undefined){html+='<td style="background:#0f1318;color:#2a3345">—</td>';continue;}
       let bg,color='#c8d0e0';
@@ -779,6 +800,23 @@ function renderBestBanner(best){
   document.getElementById('bb-conf').textContent=best.confidence;
 }
 
+function renderPrices(prices){
+  const container=document.getElementById('venue-price-list');
+  container.innerHTML=prices.map(p=>{
+    const source=(p.source||'').toLowerCase().includes('live')?'live':'modeled';
+    return `
+    <div class="price-item">
+      <span class="venue-name">${p.exchange}</span>
+      <span class="venue-price">$${p.last.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+      <span class="venue-meta">
+        <span>B ${p.bid.toLocaleString('en-US',{maximumFractionDigits:2})} / A ${p.ask.toLocaleString('en-US',{maximumFractionDigits:2})}</span>
+        <span>fee ${(p.taker_fee*100).toFixed(2)}% · liq ${Math.round(p.liquidity_score*100)}</span>
+        <span class="venue-source ${source}">${source}</span>
+      </span>
+    </div>
+  `}).join('');
+}
+
 /* === SCAN LOOP === */
 async function scan(){
   setStatus('wait','SCANNING');
@@ -807,6 +845,7 @@ async function scan(){
     renderTopBar(lastPrices,lastOpps,best);
     renderHero(lastPrices,lastOpps,best);
     renderBestBanner(best);
+    renderPrices(lastPrices);
     setStatus('ok','LIVE · '+lastPrices.length+' VENUES');
   }catch(e){
     console.error(e);

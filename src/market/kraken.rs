@@ -69,15 +69,15 @@ impl KrakenExchange {
             
             if let Some(bids) = data["bids"].as_array() {
                 for b in bids {
-                    let p = Decimal::from_str(&b["price"].to_string()).unwrap();
-                    let q = Decimal::from_str(&b["qty"].to_string()).unwrap();
+                    let p = Decimal::from_str(b["price"].as_str().unwrap_or("0")).unwrap_or_default();
+                    let q = Decimal::from_str(b["qty"].as_str().unwrap_or("0")).unwrap_or_default();
                     book.update_bid(p, q);
                 }
             }
             if let Some(asks) = data["asks"].as_array() {
                 for a in asks {
-                    let p = Decimal::from_str(&a["price"].to_string()).unwrap();
-                    let q = Decimal::from_str(&a["qty"].to_string()).unwrap();
+                    let p = Decimal::from_str(a["price"].as_str().unwrap_or("0")).unwrap_or_default();
+                    let q = Decimal::from_str(a["qty"].as_str().unwrap_or("0")).unwrap_or_default();
                     book.update_ask(p, q);
                 }
             }

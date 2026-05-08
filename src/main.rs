@@ -51,6 +51,7 @@ async fn main() -> Result<()> {
         opportunities: parking_lot::RwLock::new(VecDeque::with_capacity(100)),
         books: dashmap::DashMap::new(),
         scan_id: std::sync::atomic::AtomicU64::new(0),
+        feed_status: dashmap::DashMap::new(),
     });
 
     // 4. Initialize Domain Engines
@@ -110,6 +111,7 @@ async fn main() -> Result<()> {
 
     for (ex, symbol) in exchanges {
         let tx = global_tx.clone();
+        let app_state = Arc::clone(&app_state);
         tokio::spawn(async move {
             let mut backoff = Duration::from_secs(1);
             loop {
@@ -117,11 +119,15 @@ async fn main() -> Result<()> {
                 match ex.subscribe_order_book(&symbol).await {
                     Ok(mut rx) => {
                         backoff = Duration::from_secs(1);
+                        app_state.feed_status.insert(ex.name().to_string(), true);
                         while let Ok(event) = rx.recv().await {
                             let _ = tx.send(event);
                         }
                     }
-                    Err(e) => error!(exchange = ex.name(), error = %e, "Feed failed"),
+                    Err(e) => {
+                        app_state.feed_status.insert(ex.name().to_string(), false);
+                        error!(exchange = ex.name(), error = %e, "Feed failed");
+                    }
                 }
                 warn!(exchange = ex.name(), "Restarting feed in {:?}...", backoff);
                 sleep(backoff).await;
